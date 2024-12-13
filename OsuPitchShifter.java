@@ -7,6 +7,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.geometry.Pos;
+import javax.sound.sampled.*;
 import java.io.File;
 import java.io.IOException;
 
@@ -84,31 +85,39 @@ public class OsuPitchShifter extends Application {
         primaryStage.show();
     }
 
-    // Method to process audio file using FFmpeg
+    // Method to process audio file by shifting pitch using Java Standard Library
     private void processFile(File file, String effect) {
         String pitchFactor = effect.equals("daycore") ? "0.8" : "1.25";
         String inputPath = file.getAbsolutePath();
         String outputPath = file.getParent() + "/processed_" + file.getName();
 
-        // FFmpeg command to adjust pitch without changing speed
-        String command = String.format(
-            "ffmpeg -i \"%s\" -af \"rubberband=pitch=%s\" \"%s\"",
-            inputPath, pitchFactor, outputPath
-        );
-
+        // Adjust pitch by changing the sample rate
         try {
-            ProcessBuilder processBuilder = new ProcessBuilder("bash", "-c", command);
-            Process process = processBuilder.start();
-            process.waitFor();
+            // Load the input audio file
+            AudioInputStream inputAudio = AudioSystem.getAudioInputStream(file);
+            AudioFormat format = inputAudio.getFormat();
 
-            if (process.exitValue() == 0) {
-                statusLabel.setText("File processed successfully: " + outputPath);
-            } else {
-                statusLabel.setText("Error processing file.");
-            }
-        } catch (IOException | InterruptedException ex) {
-            ex.printStackTrace();
-            statusLabel.setText("An error occurred: " + ex.getMessage());
+            // Modify the sample rate for pitch shifting
+            AudioFormat newFormat = new AudioFormat(
+                format.getEncoding(),
+                (int)(format.getSampleRate() * Float.parseFloat(pitchFactor)), // Adjust sample rate
+                format.getSampleSizeInBits(),
+                format.getChannels(),
+                format.getFrameSize(),
+                (float)(format.getFrameRate() * Float.parseFloat(pitchFactor)), // Adjust frame rate
+                format.isBigEndian()
+            );
+
+            // Create the output audio stream with the new format
+            AudioInputStream outputAudio = AudioSystem.getAudioInputStream(newFormat, inputAudio);
+
+            // Save the modified audio to the output file
+            File outputFile = new File(outputPath);
+            AudioSystem.write(outputAudio, AudioFileFormat.Type.WAVE, outputFile);
+            statusLabel.setText("File processed successfully: " + outputPath);
+        } catch (UnsupportedAudioFileException | IOException e) {
+            e.printStackTrace();
+            statusLabel.setText("An error occurred: " + e.getMessage());
         }
     }
 }
